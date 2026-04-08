@@ -31,38 +31,38 @@ contract Token is IERC20, IMintableToken, IDividends {
   event Approval(address indexed owner, address indexed spender, uint256 value);
   event DividendWithdrawn(address indexed payee, address indexed dest, uint256 amount);
 
-  mapping(address => mapping(address => uint256)) private allowances;
+  mapping(address => mapping(address => uint256)) private _allowances;
 
   // Dividends
-  address[] private holders;
-  mapping(address => bool) private isHolder;
-  mapping(address => uint256) private holderIndex;
-  mapping(address => uint256) private withdrawableDividends;
+  address[] private _tokenHolders;
+  mapping(address => bool) private _isTokenHolder;
+  mapping(address => uint256) private _tokenHolderIndex;
+  mapping(address => uint256) private _withdrawableDividend;
 
   // IERC20
 
-  function allowance(address owner, address spender) external view override returns (uint256) {
-    return allowances[owner][spender];
+  function allowance(address owner_, address spender_) external view override returns (uint256) {
+    return _allowances[owner_][spender_];
   }
 
-  function transfer(address to, uint256 value) external override returns (bool) {
-    require(to != address(0), "Invalid recipient");
-    _transfer(msg.sender, to, value);
+  function transfer(address to_, uint256 value_) external override returns (bool) {
+    require(to_ != address(0), "Invalid recipient");
+    _transfer(msg.sender, to_, value_);
     return true;
   }
 
-  function approve(address spender, uint256 value) external override returns (bool) {
-    require(spender != address(0), "Invalid spender");
-    allowances[msg.sender][spender] = value;
-    emit Approval(msg.sender, spender, value);
+  function approve(address spender_, uint256 value_) external override returns (bool) {
+    require(spender_ != address(0), "Invalid spender");
+    _allowances[msg.sender][spender_] = value_;
+    emit Approval(msg.sender, spender_, value_);
     return true;
   }
 
-  function transferFrom(address from, address to, uint256 value) external override returns (bool) {
-    require(to != address(0), "Invalid recipient");
-    require(allowances[from][msg.sender] >= value, "Insufficient allowance");
-    allowances[from][msg.sender] = allowances[from][msg.sender].sub(value);
-    _transfer(from, to, value);
+  function transferFrom(address from_, address to_, uint256 value_) external override returns (bool) {
+    require(to_ != address(0), "Invalid recipient");
+    require(_allowances[from_][msg.sender] >= value_, "Insufficient allowance");
+    _allowances[from_][msg.sender] = _allowances[from_][msg.sender].sub(value_);
+    _transfer(from_, to_, value_);
     return true;
   }
 
@@ -75,109 +75,109 @@ contract Token is IERC20, IMintableToken, IDividends {
     balanceOf[msg.sender] = balanceOf[msg.sender].add(amount);
     totalSupply = totalSupply.add(amount);
     
-    // Add to holder list if not already present
-    if (!isHolder[msg.sender]) {
-      addHolder(msg.sender);
+    // Add to token holder list if not already present
+    if (!_isTokenHolder[msg.sender]) {
+      _addTokenHolder(msg.sender);
     }
     emit Transfer(address(0), msg.sender, amount);
   }
 
-  function burn(address payable dest) external override {
-    require(dest != address(0), "Invalid destination");
+  function burn(address payable dest_) external override {
+    require(dest_ != address(0), "Invalid destination");
     require(balanceOf[msg.sender] > 0, "No tokens to burn");
     
     uint256 amount = balanceOf[msg.sender];
     balanceOf[msg.sender] = 0;
     totalSupply = totalSupply.sub(amount);
     
-    // Remove from holder list
-    if (isHolder[msg.sender]) {
-      removeHolder(msg.sender);
+    // Remove from token holder list
+    if (_isTokenHolder[msg.sender]) {
+      _removeTokenHolder(msg.sender);
     }
     
     emit Transfer(msg.sender, address(0), amount);
     // Send ETH to destination
-    (bool success, ) = dest.call{value: amount}("");
+    (bool success, ) = dest_.call{value: amount}("");
     require(success, "ETH transfer failed");
   }
 
   // IDividends
 
   function getNumTokenHolders() external view override returns (uint256) {
-    return holders.length;
+    return _tokenHolders.length;
   }
 
-  function getTokenHolder(uint256 index) external view override returns (address) {
-    if (index < 1 || index > holders.length) {
+  function getTokenHolder(uint256 index_) external view override returns (address) {
+    if (index_ < 1 || index_ > _tokenHolders.length) {
       return address(0);
     }
-    return holders[index - 1]; // Convert 1-based to 0-based
+    return _tokenHolders[index_ - 1]; // Convert 1-based to 0-based
   }
 
   function recordDividend() external payable override {
     require(msg.value > 0, "Dividend must be greater than 0");
     
     // Distribute dividend to all current holders
-    for (uint256 i = 0; i < holders.length; i++) {
-      address holder = holders[i];
-      uint256 dividend = msg.value.mul(balanceOf[holder]).div(totalSupply);
-      withdrawableDividends[holder] = withdrawableDividends[holder].add(dividend);
+    for (uint256 i = 0; i < _tokenHolders.length; i++) {
+      address tokenHolder = _tokenHolders[i];
+      uint256 dividend = msg.value.mul(balanceOf[tokenHolder]).div(totalSupply);
+      _withdrawableDividend[tokenHolder] = _withdrawableDividend[tokenHolder].add(dividend);
     }
   }
 
-  function getWithdrawableDividend(address payee) external view override returns (uint256) {
-    return withdrawableDividends[payee];
+  function getWithdrawableDividend(address payee_) external view override returns (uint256) {
+    return _withdrawableDividend[payee_];
   }
 
-  function withdrawDividend(address payable dest) external override {
-    require(dest != address(0), "Invalid destination");
-    uint256 amount = withdrawableDividends[msg.sender];
-    withdrawableDividends[msg.sender] = 0;
-    (bool success, ) = dest.call{value: amount}("");
+  function withdrawDividend(address payable dest_) external override {
+    require(dest_ != address(0), "Invalid destination");
+    uint256 amount = _withdrawableDividend[msg.sender];
+    _withdrawableDividend[msg.sender] = 0;
+    (bool success, ) = dest_.call{value: amount}("");
     require(success, "ETH transfer failed");
-    emit DividendWithdrawn(msg.sender, dest, amount);
+    emit DividendWithdrawn(msg.sender, dest_, amount);
   }
 
   // Helper functions
 
-  function _transfer(address from, address to, uint256 value) private {
-    require(balanceOf[from] >= value, "Insufficient balance");
+  function _transfer(address from_, address to_, uint256 value_) private {
+    require(balanceOf[from_] >= value_, "Insufficient balance");
     
-    balanceOf[from] = balanceOf[from].sub(value);
-    balanceOf[to] = balanceOf[to].add(value);
+    balanceOf[from_] = balanceOf[from_].sub(value_);
+    balanceOf[to_] = balanceOf[to_].add(value_);
     
-    // Update holder list
-    if (balanceOf[from] == 0 && isHolder[from]) {
-      removeHolder(from);
+    // Update token holder list
+    if (balanceOf[from_] == 0 && _isTokenHolder[from_]) {
+      _removeTokenHolder(from_);
     }
-    if (value > 0 && balanceOf[to] > 0 && !isHolder[to]) {
-      addHolder(to);
+    if (value_ > 0 && balanceOf[to_] > 0 && !_isTokenHolder[to_]) {
+      _addTokenHolder(to_);
     }
-    emit Transfer(from, to, value);
+    emit Transfer(from_, to_, value_);
   }
 
-  function addHolder(address holder) private {
-    holders.push(holder);
-    isHolder[holder] = true;
-    holderIndex[holder] = holders.length; // 1-based index to allow default 0
+  function _addTokenHolder(address tokenHolder_) private {
+    _tokenHolders.push(tokenHolder_);
+    _isTokenHolder[tokenHolder_] = true;
+    _tokenHolderIndex[tokenHolder_] = _tokenHolders.length; // 1-based index to allow default 0
   }
 
-  function removeHolder(address holder) private {
-    uint256 index = holderIndex[holder];
-    if (index == 0) {
+  function _removeTokenHolder(address tokenHolder_) private {
+    uint256 index_ = _tokenHolderIndex[tokenHolder_];
+    if (index_ == 0) {
       return;
     }
 
-    uint256 lastIndex = holders.length;
-    address lastHolder = holders[lastIndex - 1];
+    uint256 lastIndex = _tokenHolders.length;
+    address lastTokenHolder = _tokenHolders[lastIndex - 1];
 
-    if (index != lastIndex) {
-      holders[index - 1] = lastHolder;
-      holderIndex[lastHolder] = index;
+    if (index_ != lastIndex) {
+      _tokenHolders[index_ - 1] = lastTokenHolder;
+      _tokenHolderIndex[lastTokenHolder] = index_;
     }
 
-    holders.pop();
-    delete holderIndex[holder];
-    isHolder[holder] = false;
+    _tokenHolders.pop();
+    delete _tokenHolderIndex[tokenHolder_];
+    _isTokenHolder[tokenHolder_] = false;
   }
 }
