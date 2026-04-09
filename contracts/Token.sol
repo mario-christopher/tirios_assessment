@@ -132,6 +132,7 @@ contract Token is IERC20, IMintableToken, IDividends {
   function withdrawDividend(address payable dest_) external override {
     require(dest_ != address(0), "Invalid destination");
     uint256 amount = _withdrawableDividend[msg.sender];
+    require(amount > 0, "No dividend to withdraw");
     _withdrawableDividend[msg.sender] = 0;
     (bool success, ) = dest_.call{value: amount}("");
     require(success, "ETH transfer failed");

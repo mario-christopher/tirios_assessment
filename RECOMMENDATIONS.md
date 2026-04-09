@@ -13,6 +13,8 @@
     - crediting remainder to a reserve
     - or applying the leftover to one holder
 
+- Consider restricting `recordDividend()` to allow only authorized access. (onlyOwner ?)
+
 ### Best/Safe Practices
 - Using `call()` instead of `transfer()` to send assets. `call()` is currently the recommended method for transferring Ether in modern Solidity development, while transfer() is no longer advised.
     - Avoids gas limits
