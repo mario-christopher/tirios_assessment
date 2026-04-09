@@ -59,6 +59,7 @@ contract Token is IERC20, IMintableToken, IDividends {
   }
 
   function transferFrom(address from_, address to_, uint256 value_) external override returns (bool) {
+    require(from_ != address(0), "Invalid sender");
     require(to_ != address(0), "Invalid recipient");
     require(_allowances[from_][msg.sender] >= value_, "Insufficient allowance");
     _allowances[from_][msg.sender] = _allowances[from_][msg.sender].sub(value_);
@@ -116,7 +117,7 @@ contract Token is IERC20, IMintableToken, IDividends {
 
   function recordDividend() external payable override {
     require(msg.value > 0, "Dividend must be greater than 0");
-    
+    require(totalSupply > 0, "No tokens minted");
     // Distribute dividend to all current holders
     for (uint256 i = 0; i < _tokenHolders.length; i++) {
       address tokenHolder = _tokenHolders[i];
